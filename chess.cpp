@@ -23,6 +23,16 @@ enum class GameResult {
     NO_RESULT, DRAW, WHITE_WON, BLACK_WON
 };
 
+const int NORTH = 8;
+const int SOUTH = -8;
+const int EAST  = 1;
+const int WEST  = -1;
+const int NORTH_EAST = 9;
+const int NORTH_WEST = 7;
+const int SOUTH_EAST = -7;
+const int SOUTH_WEST = -9;
+const int DIRECTION_OFFSETS[] = {NORTH, EAST, WEST, SOUTH, NORTH_EAST, NORTH_WEST, SOUTH_EAST, SOUTH_WEST};
+
 struct StateInfo {
     int half_move_cnt;
     int castle_rights;
@@ -71,9 +81,12 @@ struct Game {
     std::vector<Move> moves;
     std::vector<StateInfo> states;
 
+    std::vector<std::vector<int>> edges;
     Game(std::string fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1") {
         std::fill(board.begin(), board.end(), 0);
         load_game_from_fen(fen);
+        edges.resize(64, std::vector<int> (8));
+        generate_steps_to_edges();
     }
 
     int get_color(int piece) {
@@ -412,6 +425,141 @@ struct Game {
             board[last_move.capture_position] = last_move.captured_piece;
         }
     }
+
+    void generate_steps_to_edges()
+    {
+        for(int rank = 0; rank <= 7; rank++)
+        {
+            for(int file = 0; file <= 7; file++)
+            {
+                int north = 7 - rank;
+                int east = 7 - file;
+                int west = file;
+                int south = rank;
+                int north_east = std::min(north, east);
+                int north_west = std::min(north, west);
+                int south_east = std::min(south, east);
+                int south_west = std::min(south, west);
+                int index = rank * 8 + file;
+                edges[index][0] = north;
+                edges[index][1] = east;
+                edges[index][2] = west;
+                edges[index][3] = south;
+                edges[index][4] = north_east;
+                edges[index][5] = north_west;
+                edges[index][6] = south_east;
+                edges[index][7] = south_west;
+            }
+        }
+    }
+
+    bool is_square_attacked(int square, int attacker_color) {
+        //straight attack
+        for (int dir = 0; dir < 4; dir++) {
+            int direction_offset = DIRECTION_OFFSETS[dir];
+            int steps = edges[square][dir];
+            for (int i = 0, cur_square = square; i < steps; i++) {
+                cur_square += direction_offset;
+                int piece = board[cur_square];
+                if (piece != 0) {
+                    if (get_color(piece) == attacker_color) {
+                        int piece_type = get_type(piece);
+                        if (piece_type == PieceType::ROOK || piece_type == PieceType::QUEEN || (piece_type == PieceType::KING && i == 0)) {
+                            return true;
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+
+        //cross attack
+        for (int dir = 4; dir < 8; dir++) {
+            int direction_offset = DIRECTION_OFFSETS[dir];
+            int steps = edges[square][dir];
+            for (int i = 0, cur_square = square; i < steps; i++) {
+                cur_square += direction_offset;
+                int piece = board[cur_square];
+                if (piece != 0) {
+                    if (get_color(piece) == attacker_color) {
+                        int piece_type = get_type(piece);
+                        if (piece_type == PieceType::BISHOP || piece_type == PieceType::QUEEN || 
+                            (piece_type == PieceType::KING && i == 0)) {
+                            return true;
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+
+        //pawn attack
+        int start;
+        if (attacker_color == Color::BLACK) {
+            start = 4;
+        } else {
+            start = 6;
+        }
+        for (int dir = start; dir < start + 2; dir++) {
+            int direction_offset = DIRECTION_OFFSETS[dir];
+            if (edges[square][dir]) {
+                int cur_square = square + direction_offset;
+                int piece = board[cur_square];
+                if (piece == (attacker_color | PieceType::PAWN)) {
+                    return true;
+                }
+            }
+        }
+
+        //knight attack
+        std::vector<int> knight_moves = generate_knight_moves(square);
+        for (int sq : knight_moves) {
+            if (board[sq] == (attacker_color | PieceType::KNIGHT)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    std::vector<int> generate_knight_moves(int square) {
+        int r = get_rank(square);
+        int f = get_file(square);
+        int dest = square + SOUTH + SOUTH + EAST;
+        std::vector<int> moves;
+        if(r > 1 && f < 7) {
+            moves.push_back(dest);
+        }
+        dest = square + NORTH + NORTH + EAST;
+        if(r < 6 && f < 7) {
+            moves.push_back(dest);
+        }
+        dest = square + NORTH + NORTH + WEST;
+        if(r < 6 && f > 0) {
+            moves.push_back(dest);
+        }
+        dest = square + SOUTH + SOUTH + WEST;
+        if(r > 1 && f > 0) {
+            moves.push_back(dest);
+        }
+        dest = square + SOUTH + EAST + EAST;
+        if(r > 0 && f < 6) {
+            moves.push_back(dest);
+        }
+        dest = square + NORTH + EAST + EAST;
+        if(r < 7 && f < 6) {
+            moves.push_back(dest);
+        }
+        dest = square + NORTH + WEST + WEST;
+        if(r < 7 && f > 1) {
+            moves.push_back(dest);
+        }
+        dest = square + SOUTH + WEST + WEST;
+        if(r > 0 && f > 1) {
+            moves.push_back(dest);
+        }
+        return moves;
+    }
 };
 
 int main() {
@@ -421,36 +569,7 @@ int main() {
         "rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq c6 0 2",
         "rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2"
     };
-
-    // for (auto fen : fens) {
-    //     Game game(fen);
-    //     game.print();
-    // }
     Game game(fens[0]);
-    std::vector<std::string> fens_at_pos;
-    fens_at_pos.push_back(game.generate_fen());
-    // game.print();
-    std::vector<Move> moves = {
-        {8, 16, 16, game.board[8], game.board[8], 0, MoveType::NORMAL},
-        {48, 40, 40, game.board[48], game.board[48], 0, MoveType::NORMAL},
-        {0, 8, 8, game.board[0], game.board[0], 0, MoveType::NORMAL},
-    };
-    for (Move move : moves) {
-        game.make_move(move);
-        // game.print();
-        fens_at_pos.push_back(game.generate_fen());
-    }
-    // std::cout << "\n============undo start==============\n";
-    std::cout << "total positions " << fens_at_pos.size() << "\n";
-    int cnt = 1;
-    for (int i = 0; i < (int)moves.size(); i++) {
-        fens_at_pos.pop_back();
-        game.unmake_move();
-        if (game.generate_fen() == fens_at_pos.back()) {
-            cnt++;
-        }
-        // game.print();
-    }
-    std::cout << "matched positions " << cnt << "\n";
+    game.print();
     return 0;
 }
