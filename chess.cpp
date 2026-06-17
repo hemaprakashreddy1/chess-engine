@@ -680,7 +680,7 @@ struct Game {
         return moves;
     }
 
-    std::vector<Move> generaet_king_moves(int square, int color) {
+    std::vector<Move> generate_king_moves(int square, int color) {
         std::vector<Move> moves;
         for (int dir = 0; dir < 8; dir++) {
             int direction_offset = DIRECTION_OFFSETS[dir];
@@ -747,7 +747,7 @@ struct Game {
                     moves.insert(moves.end(), cur_moves.begin(), cur_moves.end());
                 }
                 if (type == PieceType::KING) {
-                    cur_moves = generaet_king_moves(i, color);
+                    cur_moves = generate_king_moves(i, color);
                     moves.insert(moves.end(), cur_moves.begin(), cur_moves.end());
                 }
             }
@@ -773,6 +773,20 @@ struct Game {
         }
         return moves;
     }
+
+    long long perft(int depth) {
+        if (depth == 0) {
+            return 1;
+        }
+        std::vector<Move> moves = generate_moves(turn);
+        long long cnt = 0;
+        for (auto &move : moves) {
+            make_move(move);
+            cnt += perft(depth - 1);
+            unmake_move();
+        }
+        return cnt;
+    }
 };
 
 int main() {
@@ -783,7 +797,5 @@ int main() {
         "rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2"
     };
     Game game(fens[0]);
-    std::vector<Move> moves = game.generate_moves(Color::WHITE);
-    std::cout << moves.size() << "\n";
     return 0;
 }
