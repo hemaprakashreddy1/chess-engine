@@ -2,6 +2,7 @@
 #include <vector>
 #include <sstream>
 #include <array>
+#include <algorithm>
 
 namespace Color {
     const int WHITE = 8, BLACK = 16, COLOR_MASK = 24;
@@ -155,13 +156,13 @@ struct Game {
         castle_rights = 0;
         for (char c : token) {
             if (c == 'K') {
-                castle_rights |= Castle::WHITE_KING;
+                castle_rights |= 4;
             } else if (c == 'Q') {
-                castle_rights |= Castle::WHITE_QUEEN;
+                castle_rights |= 8;
             } else if (c == 'k') {
-                castle_rights |= Castle::BLACK_KING;
+                castle_rights |= 1;
             } else if (c == 'q') {
-                castle_rights |= Castle::BLACK_QUEEN;
+                castle_rights |= 2;
             }
         }
 
@@ -309,27 +310,36 @@ struct Game {
         } else if (type == PieceType::ROOK) {
             if (turn == Color::WHITE) {
                 if ((castle_rights & 8) && move.from == 0) {
-                    castle_rights &= 11;
-                } else if ((castle_rights & 4) && move.from == 7) {
                     castle_rights &= 7;
+                } else if ((castle_rights & 4) && move.from == 7) {
+                    castle_rights &= 11;
                 }
             } else {
                 if ((castle_rights & 2) && move.from == 56) {
-                    castle_rights &= 14;
-                } else if ((castle_rights & 4) && move.from == 63) {
                     castle_rights &= 13;
+                } else if ((castle_rights & 1) && move.from == 63) {
+                    castle_rights &= 14;
                 }
             }
         } else if (type == PieceType::PAWN) {
             if (turn == Color::WHITE) {
-                if (move.from + 16 == move.to) {
-                    en_passant_square = move.from + 8;
+                if (move.from + NORTH + NORTH == move.to) {
+                    en_passant_square = move.from + NORTH;
                 }
             } else {
-                if (move.from - 16 == move.to) {
-                    en_passant_square = move.to - 8;
+                if (move.from + SOUTH + SOUTH == move.to) {
+                    en_passant_square = move.from + SOUTH;
                 }
             }
+        }
+        if (move.to == 0) {
+            castle_rights &= 7;
+        } else if (move.to == 7) {
+            castle_rights &= 11;
+        } else if (move.to == 56) {
+            castle_rights &= 13;
+        } else if (move.to == 63) {
+            castle_rights &= 14;
         }
 
         if (move.move_type == MoveType::KING_CASTLE) {
@@ -690,7 +700,7 @@ struct Game {
             opp_color = Color::BLACK;
         }
         if ((square == 4 && castle_rights & 4) || (square == 60 && castle_rights & 1)) {
-            if (castle_rights & 4 && board[square + EAST] == 0 && board[square + 2 * EAST] == 0
+            if (board[square + EAST] == 0 && board[square + 2 * EAST] == 0
                 && !is_square_attacked(square, opp_color) && !is_square_attacked(square + EAST, opp_color) 
                 && !is_square_attacked(square + 2 * EAST, opp_color)) {
                 Move move(square, square + 2 * EAST, square + 2 * EAST, board[square], board[square], 0, MoveType::KING_CASTLE);
@@ -698,7 +708,7 @@ struct Game {
             }
         }
         if ((square == 4 && castle_rights & 8) || (square == 60 && castle_rights & 2)) {
-            if (castle_rights & 4 && board[square + WEST] == 0 && board[square + 2 * WEST] == 0
+            if (board[square + WEST] == 0 && board[square + 2 * WEST] == 0 && board[square + 3 * WEST] == 0
                 && !is_square_attacked(square, opp_color) && !is_square_attacked(square + WEST, opp_color) 
                 && !is_square_attacked(square + 2 * WEST, opp_color)) {
                 Move move(square, square + 2 * WEST, square + 2 * WEST, board[square], board[square], 0, MoveType::QUEEN_CASTLE);
@@ -765,40 +775,76 @@ struct Game {
         return moves;
     }
 
-    long long perft(int depth) {
+    std::string square_to_notation(int square) {
+        int r = get_rank(square);
+        int f = get_file(square);
+        std::string res;
+        res += char(f + 'a');
+        res += char(r + '1');
+        return res;
+    }
+
+    int notation_to_square(std::string s) {
+        int r = s[1] - '1';
+        int f = s[0] - 'a';
+        return r * 8 + f;
+    }
+
+    long long perft(int depth, bool first_step = true) {
         if (depth == 0) {
             return 1;
         }
         std::vector<Move> moves = generate_moves(turn);
+        std::vector<std::string> perft_res;
         long long cnt = 0;
         for (auto &move : moves) {
             make_move(move);
-            cnt += perft(depth - 1);
+            long long cur_cnt = perft(depth - 1, false);
+            if (first_step) {
+                std::string res;
+                res += square_to_notation(move.from);
+                res += square_to_notation(move.to);
+                res += ": ";
+                res += std::to_string(cur_cnt);
+                perft_res.push_back(res);
+            }
+            cnt += cur_cnt;
             unmake_move();
         }
+        if (first_step) {
+            std::sort(perft_res.begin(), perft_res.end());
+            for (auto &res : perft_res) {
+                std::cout << res << "\n";
+            }
+            std::cout << "nodes searched: " << cnt << "\n";
+        }
         return cnt;
+    }
+
+    void print_fen_after_move(std::string move) {
+        int from = notation_to_square(move.substr(0, 2));
+        int to = notation_to_square(move.substr(2, 2));
+        std::vector<Move> moves = generate_moves(turn);
+        for (auto move : moves) {
+            if (move.from == from && move.to == to) {
+                make_move(move);
+                std::cout << generate_fen() << "\n";
+            }
+        }
     }
 };
 
 void print_perft(Game &game, int depth) {
     std::cout << "depth\tcount\n";
     for (int i = 1; i <= depth; i++) {
-        std::cout << i << "\t" << game.perft(i) << "\n";
+        std::cout << i << "\t" << game.perft(i, false) << "\n";
     }
 }
 
+
 int main() {
-    std::vector<std::string> fens = {
-        "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
-        "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1",
-        "rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq c6 0 2",
-        "rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2",
-        "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
-        "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1",
-        "r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1",
-        "r2q1rk1/pP1p2pp/Q4n2/bbp1p3/Np6/1B3NBn/pPPP1PPP/R3K2R b KQ - 0 1",
-    };
-    Game game(fens[5]);
-    print_perft(game, 4);
+    std::string fen = "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1";
+    Game game(fen);
+    game.perft(7);
     return 0;
 }
