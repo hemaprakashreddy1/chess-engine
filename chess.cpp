@@ -257,6 +257,7 @@ struct Game {
         piece_type_char[PieceType::KNIGHT] = 'n';
         piece_type_char[PieceType::PAWN] = 'p';
 
+        std::cout << "\n =================================== \n";
         printf("\t");
         for(int i = 0; i < 8; i++)
         {
@@ -279,6 +280,7 @@ struct Game {
             }
             printf("\n\n");
         }
+        std::cout << "\n =================================== \n";
     }
 
     void print() {
@@ -572,8 +574,8 @@ struct Game {
             int direction_offset = DIRECTION_OFFSETS[dir];
             int steps = edges[square][dir];
             for (int i = 0, cur_square = square; i < std::min(steps, steps_limit); i++) {
-                Move move(square, cur_square, cur_square, board[square], board[cur_square], board[cur_square], MoveType::NORMAL);
                 cur_square += direction_offset;
+                Move move(square, cur_square, cur_square, board[square], board[square], board[cur_square], MoveType::NORMAL);
                 int piece = board[cur_square];
                 if (piece != 0) {
                     if (get_color(piece) != color) {
@@ -583,6 +585,7 @@ struct Game {
                 }
                 moves.push_back(move);
             }
+
         }
         return moves;
     }
@@ -593,8 +596,8 @@ struct Game {
             int direction_offset = DIRECTION_OFFSETS[dir];
             int steps = edges[square][dir];
             for (int i = 0, cur_square = square; i < std::min(steps, steps_limit); i++) {
-                Move move(square, cur_square, cur_square, board[square], board[cur_square], board[cur_square], MoveType::NORMAL);
                 cur_square += direction_offset;
+                Move move(square, cur_square, cur_square, board[square], board[square], board[cur_square], MoveType::NORMAL);
                 int piece = board[cur_square];
                 if (piece != 0) {
                     if (get_color(piece) != color) {
@@ -662,7 +665,7 @@ struct Game {
         }
         int rank = get_rank(square);
         cur_square += direction_offset;
-        if (((color == Color::WHITE && rank == 1) || (color == Color::BLACK && rank == 6)) && board[cur_square + direction_offset] == 0 && board[cur_square + 2 * direction_offset] == 0) {
+        if (((color == Color::WHITE && rank == 1) || (color == Color::BLACK && rank == 6)) && board[square + direction_offset] == 0 && board[square + 2 * direction_offset] == 0) {
             Move move(square, cur_square, cur_square, board[square], board[square], board[cur_square], MoveType::NORMAL);
             moves.push_back(move);
         } 
@@ -673,27 +676,15 @@ struct Game {
         std::vector<Move> moves;
         for (int sq : generate_knight_squares(square)) {
             if (get_color(board[sq]) != color) {
-                Move move(square, sq, sq, board[square], board[sq], board[sq], MoveType::NORMAL);
+                Move move(square, sq, sq, board[square], board[square], board[sq], MoveType::NORMAL);
                 moves.push_back(move);
             }
         }
         return moves;
     }
 
-    std::vector<Move> generate_king_moves(int square, int color) {
+    std::vector<Move> generate_castle_moves(int square, int color) {
         std::vector<Move> moves;
-        for (int dir = 0; dir < 8; dir++) {
-            int direction_offset = DIRECTION_OFFSETS[dir];
-            int steps = edges[square][dir];
-            if (steps) {
-                int cur_square = square + direction_offset;
-                if (get_color(board[cur_square]) != color) {
-                    Move move(square, cur_square, cur_square, board[square], board[square], board[cur_square], MoveType::NORMAL);
-                    moves.push_back(move);
-                }
-            }
-        }
-
         int opp_color = Color::WHITE;
         if (color == Color::WHITE) {
             opp_color = Color::BLACK;
@@ -732,12 +723,6 @@ struct Game {
                     cur_moves = generate_cross_moves(i, color);
                     moves.insert(moves.end(), cur_moves.begin(), cur_moves.end());
                 }
-                if (type == PieceType::KING) {
-                    cur_moves = generate_straight_moves(i, color, 1);
-                    moves.insert(moves.end(), cur_moves.begin(), cur_moves.end());
-                    cur_moves = generate_cross_moves(i, color, 1);
-                    moves.insert(moves.end(), cur_moves.begin(), cur_moves.end());
-                }
                 if (type == PieceType::PAWN) {
                     cur_moves = generate_pawn_moves(i, color);
                     moves.insert(moves.end(), cur_moves.begin(), cur_moves.end());
@@ -747,7 +732,11 @@ struct Game {
                     moves.insert(moves.end(), cur_moves.begin(), cur_moves.end());
                 }
                 if (type == PieceType::KING) {
-                    cur_moves = generate_king_moves(i, color);
+                    cur_moves = generate_straight_moves(i, color, 1);
+                    moves.insert(moves.end(), cur_moves.begin(), cur_moves.end());
+                    cur_moves = generate_cross_moves(i, color, 1);
+                    moves.insert(moves.end(), cur_moves.begin(), cur_moves.end());
+                    cur_moves = generate_castle_moves(i, color);
                     moves.insert(moves.end(), cur_moves.begin(), cur_moves.end());
                 }
             }
@@ -756,16 +745,18 @@ struct Game {
     }
 
     std::vector<Move> generate_moves(int color) {
-        int king_square = white_king_square;
         int opp_color = Color::BLACK;
         if (color == Color::BLACK) {
-            king_square = black_king_square;
             opp_color = Color::WHITE;
         }
         std::vector<Move> pseudo_moves = generate_pseudo_legal_moves(color);
         std::vector<Move> moves;
         for (Move &move : pseudo_moves) {
             make_move(move);
+            int king_square = white_king_square;
+            if (color == Color::BLACK) {
+                king_square = black_king_square;
+            }
             if (!is_square_attacked(king_square, opp_color)) {
                 moves.push_back(move);
             }
@@ -789,13 +780,25 @@ struct Game {
     }
 };
 
+void print_perft(Game &game, int depth) {
+    std::cout << "depth\tcount\n";
+    for (int i = 1; i <= depth; i++) {
+        std::cout << i << "\t" << game.perft(i) << "\n";
+    }
+}
+
 int main() {
     std::vector<std::string> fens = {
         "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
         "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1",
         "rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq c6 0 2",
-        "rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2"
+        "rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2",
+        "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
+        "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1",
+        "r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1",
+        "r2q1rk1/pP1p2pp/Q4n2/bbp1p3/Np6/1B3NBn/pPPP1PPP/R3K2R b KQ - 0 1",
     };
-    Game game(fens[0]);
+    Game game(fens[5]);
+    print_perft(game, 4);
     return 0;
 }
