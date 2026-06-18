@@ -1,0 +1,1 @@
+g++ -Wall chess.cpp Position.cpp -o chess
