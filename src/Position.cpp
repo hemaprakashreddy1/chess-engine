@@ -712,7 +712,7 @@ int Position::notation_to_square(std::string s) {
     return r * 8 + f;
 }
 
-long long Position::perft(int depth, bool first_step) {
+long long Position::perft(int depth, bool first_step, bool silent) {
     if (depth == 0) {
         return 1;
     }
@@ -733,7 +733,7 @@ long long Position::perft(int depth, bool first_step) {
         cnt += cur_cnt;
         unmake_move();
     }
-    if (first_step) {
+    if (first_step && !silent) {
         std::sort(perft_res.begin(), perft_res.end());
         for (auto &res : perft_res) {
             std::cout << res << "\n";

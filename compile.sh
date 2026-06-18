@@ -1,1 +1,1 @@
-g++ -Wall chess.cpp Position.cpp -o chess
+g++ -Wall src/chess.cpp src/Position.cpp -o chess

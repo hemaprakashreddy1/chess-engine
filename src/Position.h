@@ -70,7 +70,7 @@ class Position {
 
     int notation_to_square(std::string s);
 
-    long long perft(int depth, bool first_step = true);
+    long long perft(int depth, bool first_step = true, bool silent = false);
 
     void print_fen_after_move(std::string move);
 };
